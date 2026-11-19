@@ -221,6 +221,35 @@ pub struct Surface {
 }
 
 impl Surface {
+    /// Request image stretching when the native surface changes size.
+    ///
+    /// Applies to the next configuration. Requires the optional surface and
+    /// swapchain maintenance extensions, their device feature, and STRETCH
+    /// support for the configured present mode. Unsupported surfaces keep
+    /// their existing behavior. See [Self::resize_scaling_enabled].
+    pub fn set_resize_scaling(&self, enabled: bool) {
+        if let Some(surface) = self
+            .inner
+            .as_any()
+            .downcast_ref::<swapchain::NativeSurface>()
+        {
+            surface.set_resize_scaling(enabled);
+        }
+    }
+
+    /// Whether the configured native swapchain uses explicit resize stretching.
+    ///
+    /// Returns false before configuration and when the request or the
+    /// required device and present-mode capabilities are unavailable.
+    pub fn resize_scaling_enabled(&self) -> bool {
+        self.swapchain.read().as_ref().is_some_and(|swapchain| {
+            swapchain
+                .as_any()
+                .downcast_ref::<swapchain::NativeSwapchain>()
+                .is_some_and(|native| native.resize_scaling_enabled())
+        })
+    }
+
     /// Returns the raw Vulkan surface handle.
     ///
     /// Returns `None` if the surface is a DXGI surface.
@@ -510,6 +539,7 @@ struct DeviceShared {
     instance: Arc<InstanceShared>,
     physical_device: vk::PhysicalDevice,
     enabled_extensions: Vec<&'static CStr>,
+    swapchain_maintenance: bool,
     extension_fns: DeviceExtensionFunctions,
     vendor_id: u32,
     pipeline_cache_validation_key: [u8; 16],

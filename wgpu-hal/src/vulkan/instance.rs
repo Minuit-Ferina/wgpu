@@ -277,6 +277,10 @@ impl super::Instance {
             extensions.push(ext::debug_utils::NAME);
         }
 
+        // Optional swapchain scaling during native window resizing.
+        extensions.push(khr::get_surface_capabilities2::NAME);
+        extensions.push(ext::surface_maintenance1::NAME);
+
         // VK_EXT_swapchain_colorspace
         // Provides wide color gamut
         extensions.push(ext::swapchain_colorspace::NAME);

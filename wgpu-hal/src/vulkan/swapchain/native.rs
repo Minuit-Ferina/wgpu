@@ -1,7 +1,10 @@
 //! Vulkan Surface and Swapchain implementation using native Vulkan surfaces.
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
-use core::any::Any;
+use core::{
+    any::Any,
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use ash::{khr, vk};
 use parking_lot::{Mutex, MutexGuard};
@@ -19,6 +22,7 @@ pub(crate) struct NativeSurface {
     raw: vk::SurfaceKHR,
     functor: khr::surface::Instance,
     instance: Arc<InstanceShared>,
+    stretch_on_resize: AtomicBool,
     /// Built from the window's `HWND` (Windows only) to answer the display-HDR
     /// query; `None` for non-Win32 surfaces.
     #[cfg(windows)]
@@ -38,6 +42,7 @@ impl NativeSurface {
             raw,
             functor,
             instance: Arc::clone(&instance.shared),
+            stretch_on_resize: AtomicBool::new(false),
             #[cfg(windows)]
             hdr_source: hwnd.map(|wh| crate::auxil::dxgi::hdr::DxgiHdrSource::new(wh.0)),
         }
@@ -45,6 +50,10 @@ impl NativeSurface {
 
     pub fn as_raw(&self) -> vk::SurfaceKHR {
         self.raw
+    }
+
+    pub fn set_resize_scaling(&self, enabled: bool) {
+        self.stretch_on_resize.store(enabled, Ordering::Relaxed);
     }
 }
 
@@ -227,6 +236,42 @@ impl Surface for NativeSurface {
             .clipped(true)
             .old_swapchain(old_swapchain);
 
+        let mut scaling = vk::SwapchainPresentScalingCreateInfoEXT::default()
+            .scaling_behavior(vk::PresentScalingFlagsEXT::STRETCH);
+        let mut resize_scaling = false;
+        if self.stretch_on_resize.load(Ordering::Relaxed) && device.shared.swapchain_maintenance {
+            let capabilities = khr::get_surface_capabilities2::Instance::new(
+                &self.instance.entry,
+                &self.instance.raw,
+            );
+            let mut mode = vk::SurfacePresentModeEXT::default()
+                .present_mode(conv::map_present_mode(config.present_mode));
+            let surface_info = vk::PhysicalDeviceSurfaceInfo2KHR::default()
+                .surface(self.raw)
+                .push_next(&mut mode);
+            let mut scaling_caps = vk::SurfacePresentScalingCapabilitiesEXT::default();
+            let mut surface_caps =
+                vk::SurfaceCapabilities2KHR::default().push_next(&mut scaling_caps);
+            // SAFETY: The live physical device and surface belong to the same
+            // instance. Both output structures remain valid during the query.
+            let result = unsafe {
+                capabilities.get_physical_device_surface_capabilities2(
+                    device.shared.physical_device,
+                    &surface_info,
+                    &mut surface_caps,
+                )
+            };
+            if result.is_ok()
+                && scaling_caps
+                    .supported_present_scaling
+                    .contains(vk::PresentScalingFlagsEXT::STRETCH)
+            {
+                info = info.push_next(&mut scaling);
+                resize_scaling = true;
+                log::debug!("Explicit swapchain resize scaling STRETCH enabled");
+            }
+        }
+
         let mut format_list_info = vk::ImageFormatListCreateInfo::default();
         if !raw_view_formats.is_empty() {
             format_list_info = format_list_info.view_formats(&raw_view_formats);
@@ -295,6 +340,7 @@ impl Surface for NativeSurface {
             images,
             fence,
             config: config.clone(),
+            resize_scaling,
             acquire_semaphores,
             next_acquire_index: 0,
             present_semaphores,
@@ -320,6 +366,7 @@ pub(crate) struct NativeSwapchain {
     /// Fence used to wait on the acquired image.
     fence: Option<vk::Fence>,
     config: crate::SurfaceConfiguration,
+    resize_scaling: bool,
 
     /// Semaphores used between image acquisition and the first submission
     /// that uses that image. This is indexed using [`next_acquire_index`].
@@ -643,6 +690,10 @@ impl Swapchain for NativeSwapchain {
 }
 
 impl NativeSwapchain {
+    pub fn resize_scaling_enabled(&self) -> bool {
+        self.resize_scaling
+    }
+
     pub(crate) fn as_raw(&self) -> vk::SwapchainKHR {
         self.raw
     }

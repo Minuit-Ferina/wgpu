@@ -42,6 +42,9 @@ pub struct PhysicalDeviceFeatures {
     /// Basic Vulkan 1.0 features.
     core: vk::PhysicalDeviceFeatures,
 
+    /// Optional native presentation scaling and swapchain maintenance.
+    swapchain_maintenance: Option<vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT<'static>>,
+
     /// Features provided by `VK_EXT_descriptor_indexing`, promoted to Vulkan 1.2.
     pub(super) descriptor_indexing:
         Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT<'static>>,
@@ -159,6 +162,9 @@ impl PhysicalDeviceFeatures {
         mut info: vk::DeviceCreateInfo<'a>,
     ) -> vk::DeviceCreateInfo<'a> {
         info = info.enabled_features(&self.core);
+        if let Some(ref mut feature) = self.swapchain_maintenance {
+            info = info.push_next(feature);
+        }
         if let Some(ref mut feature) = self.descriptor_indexing {
             info = info.push_next(feature);
         }
@@ -293,6 +299,20 @@ impl PhysicalDeviceFeatures {
             requested_features.intersects(wgt::Features::PARTIALLY_BOUND_BINDING_ARRAY);
 
         Self {
+            swapchain_maintenance: if enabled_extensions
+                .contains(&ext::swapchain_maintenance1::NAME)
+                && phd_features
+                    .swapchain_maintenance
+                    .as_ref()
+                    .is_some_and(|feature| feature.swapchain_maintenance1 != 0)
+            {
+                Some(
+                    vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default()
+                        .swapchain_maintenance1(true),
+                )
+            } else {
+                None
+            },
             // vk::PhysicalDeviceFeatures is a struct composed of Bool32's while
             // Features is a bitfield so we need to map everything manually
             core: vk::PhysicalDeviceFeatures::default()
@@ -2012,6 +2032,17 @@ impl super::InstanceShared {
         {
             let core = vk::PhysicalDeviceFeatures::default();
             let mut features2 = vk::PhysicalDeviceFeatures2KHR::default().features(core);
+            if capabilities.supports_extension(ext::swapchain_maintenance1::NAME)
+                && self.extensions.contains(&ext::surface_maintenance1::NAME)
+                && self
+                    .extensions
+                    .contains(&khr::get_surface_capabilities2::NAME)
+            {
+                let next = features
+                    .swapchain_maintenance
+                    .insert(vk::PhysicalDeviceSwapchainMaintenance1FeaturesEXT::default());
+                features2 = features2.push_next(next);
+            }
 
             // `VK_KHR_multiview` is promoted to 1.1
             if capabilities.device_api_version >= vk::API_VERSION_1_1
@@ -2514,7 +2545,7 @@ impl super::Adapter {
     }
 
     pub fn required_device_extensions(&self, features: wgt::Features) -> Vec<&'static CStr> {
-        let (supported_extensions, unsupported_extensions) = self
+        let (mut supported_extensions, unsupported_extensions) = self
             .phd_capabilities
             .get_required_extensions(features)
             .iter()
@@ -2526,6 +2557,14 @@ impl super::Adapter {
             log::debug!("Missing extensions: {unsupported_extensions:?}");
         }
 
+        if self
+            .phd_features
+            .swapchain_maintenance
+            .as_ref()
+            .is_some_and(|feature| feature.swapchain_maintenance1 != 0)
+        {
+            supported_extensions.push(ext::swapchain_maintenance1::NAME);
+        }
         log::debug!("Supported extensions: {supported_extensions:?}");
         supported_extensions
     }
@@ -2911,6 +2950,12 @@ impl super::Adapter {
             instance: Arc::clone(&self.instance),
             physical_device: self.raw,
             enabled_extensions: enabled_extensions.into(),
+            swapchain_maintenance: enabled_extensions.contains(&ext::swapchain_maintenance1::NAME)
+                && self
+                    .phd_features
+                    .swapchain_maintenance
+                    .as_ref()
+                    .is_some_and(|feature| feature.swapchain_maintenance1 != 0),
             extension_fns: super::DeviceExtensionFunctions {
                 debug_utils: debug_utils_fn,
                 draw_indirect_count: indirect_count_fn,

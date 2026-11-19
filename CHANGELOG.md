@@ -42,6 +42,13 @@ Bottom level categories:
 
 ## Unreleased
 
+### Added/New Features
+
+#### Vulkan
+
+- Add opt-in swapchain image stretching during native window resizing through `Surface::set_resize_scaling`. Query the configured capability with `Surface::resize_scaling_enabled`. The optional maintenance extensions and STRETCH support are checked before enabling it.
+
+
 ## v30.0.1 (2026-08-21)
 
 ### Bug Fixes
