@@ -185,6 +185,9 @@ pub enum BuildAccelerationStructureError {
     )]
     TlasInvalidCustomIndex(ResourceErrorIdent),
 
+    #[error("Tlas {0:?} an associated instance has both FORCE_OPAQUE and FORCE_NO_OPAQUE set")]
+    TlasInvalidInstanceFlags(ResourceErrorIdent),
+
     #[error(
         "Tlas {0:?} has {1} active instances but only {2} are allowed as specified by the descriptor at creation"
     )]
@@ -242,6 +245,7 @@ impl WebGpuError for BuildAccelerationStructureError {
             | Self::CompactedBlas(..)
             | Self::MissingIndexBuffer(..)
             | Self::TlasInvalidCustomIndex(..)
+            | Self::TlasInvalidInstanceFlags(..)
             | Self::TlasInstanceCountExceeded(..)
             | Self::TransformMissing(..)
             | Self::UseTransformMissing(..)
@@ -324,6 +328,7 @@ pub struct TlasInstance<'a> {
     pub transform: &'a [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
+    pub flags: wgt::TlasInstanceFlags,
 }
 
 pub struct TlasPackage<'a> {
@@ -415,6 +420,8 @@ pub struct OwnedTlasInstance<R: ReferenceType> {
     pub transform: [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub flags: wgt::TlasInstanceFlags,
 }
 
 pub type ArcTlasInstance = OwnedTlasInstance<ArcReferences>;

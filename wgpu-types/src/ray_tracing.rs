@@ -151,14 +151,42 @@ bitflags::bitflags!(
 );
 
 bitflags::bitflags!(
+    /// Flags of a single instance of a top level acceleration structure.
+    ///
+    /// The bits are those of `VkGeometryInstanceFlagBitsKHR`,
+    /// `D3D12_RAYTRACING_INSTANCE_FLAGS` and `MTLAccelerationStructureInstanceOptions`,
+    /// which share their values.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde", serde(transparent))]
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+    pub struct TlasInstanceFlags: u8 {
+        /// Hits on this instance's triangles are reported from both sides: the ray flags
+        /// that cull front or back facing triangles leave this instance alone (a
+        /// double-sided surface).
+        const TRIANGLE_FACING_CULL_DISABLE = 1 << 0;
+        /// Inverts which side of this instance's triangles is the front face, for an
+        /// instance whose transform mirrors it (a negative determinant): the facing is
+        /// decided in object space, before the instance transform.
+        const TRIANGLE_FLIP_FACING = 1 << 1;
+        /// This instance's geometry is treated as opaque whatever its geometry flags say.
+        /// Must not be set with [`Self::FORCE_NO_OPAQUE`].
+        const FORCE_OPAQUE = 1 << 2;
+        /// This instance's geometry is treated as non-opaque whatever its geometry flags
+        /// say: its hits go through the ray query's candidate loop. Must not be set with
+        /// [`Self::FORCE_OPAQUE`].
+        const FORCE_NO_OPAQUE = 1 << 3;
+    }
+);
+
+bitflags::bitflags!(
     /// Flags for acceleration structure geometries
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[cfg_attr(feature = "serde", serde(transparent))]
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct AccelerationStructureGeometryFlags: u8 {
-        /// Is OPAQUE (is there no alpha test) recommended as currently in naga there is no
-        /// candidate intersections yet so currently BLASes without this flag will not have hits.
-        /// Not enabling this makes the BLAS unable to be interacted with in WGSL.
+        /// Is OPAQUE (there is no alpha test). Hits on geometry without this flag are
+        /// candidates: a ray query only commits them through `rayQueryConfirmIntersection`
+        /// in its `rayQueryProceed` loop.
         const OPAQUE = 1 << 0;
         /// NO_DUPLICATE_ANY_HIT_INVOCATION, not useful unless using hal with wgpu, ray-tracing
         /// pipelines are not supported in wgpu so any-hit shaders do not exist. For when any-hit

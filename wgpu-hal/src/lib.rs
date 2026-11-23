@@ -3050,6 +3050,8 @@ pub struct TlasInstance {
     pub transform: [f32; 12],
     pub custom_data: u32,
     pub mask: u8,
+    /// Facing and opacity overrides; the bits are the same on every backend.
+    pub flags: wgt::TlasInstanceFlags,
     pub blas_address: u64,
     /// The offset for the index into the intersection hit
     /// group calculation. Number is in hit groups.

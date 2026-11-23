@@ -2146,7 +2146,12 @@ impl crate::Device for super::Device {
                     },
                 ],
             },
-            options: MTLAccelerationStructureInstanceOptions::None,
+            // The bits of wgt::TlasInstanceFlags are those of the options.
+            // TRIANGLE_FLIP_FACING is TriangleFrontFacingWindingCounterClockwise
+            // here: it inverts Metal's default (clockwise) winding as long as
+            // the intersector keeps that default (see the winding TODO of
+            // naga's MSL ray queries).
+            options: MTLAccelerationStructureInstanceOptions(u32::from(instance.flags.bits())),
             mask: instance.mask as u32,
             intersectionFunctionTableOffset: instance.pipeline_intersection_data_offset,
             userID: instance.custom_data,

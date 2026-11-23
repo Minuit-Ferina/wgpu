@@ -173,6 +173,7 @@ impl Global {
                                         transform: *instance.transform,
                                         custom_data: instance.custom_data,
                                         mask: instance.mask,
+                                        flags: instance.flags,
                                     })
                                 })
                                 .transpose()
@@ -238,6 +239,13 @@ pub(crate) fn build_acceleration_structures(
                     tlas.error_ident(),
                 ));
             }
+            if instance.flags.contains(
+                wgt::TlasInstanceFlags::FORCE_OPAQUE | wgt::TlasInstanceFlags::FORCE_NO_OPAQUE,
+            ) {
+                return Err(BuildAccelerationStructureError::TlasInvalidInstanceFlags(
+                    tlas.error_ident(),
+                ));
+            }
             let blas = &instance.blas;
             state.tracker.blas_s.insert_single(blas.clone());
 
@@ -246,6 +254,7 @@ pub(crate) fn build_acceleration_structures(
                     transform: instance.transform,
                     custom_data: instance.custom_data,
                     mask: instance.mask,
+                    flags: instance.flags,
                     blas_address: blas.handle,
                     pipeline_intersection_data_offset: 0,
                 },

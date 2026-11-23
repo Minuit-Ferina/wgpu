@@ -19,6 +19,9 @@ static_assertions::assert_impl_all!(BlasAABBGeometrySizeDescriptor: Send, Sync);
 /// Minimum stride for AABB geometry (24 bytes: two `vec3<f32>`).
 pub use wgt::AABB_GEOMETRY_MIN_STRIDE;
 
+/// Facing and opacity overrides of a [`TlasInstance`].
+pub use wgt::TlasInstanceFlags;
+
 /// Descriptor for the size defining attributes, for a bottom level acceleration structure.
 pub type BlasGeometrySizeDescriptors = wgt::BlasGeometrySizeDescriptors;
 static_assertions::assert_impl_all!(BlasGeometrySizeDescriptors: Send, Sync);
@@ -65,6 +68,8 @@ pub struct TlasInstance {
     /// Mask for the instance used inside the shader to filter instances.
     /// Reports hit only if `(shader_cull_mask & tlas_instance.mask) != 0u`.
     pub mask: u8,
+    /// Facing and opacity overrides of this instance (none by default).
+    pub flags: wgt::TlasInstanceFlags,
 }
 
 impl TlasInstance {
@@ -85,7 +90,15 @@ impl TlasInstance {
             transform,
             custom_data,
             mask,
+            flags: wgt::TlasInstanceFlags::empty(),
         }
+    }
+
+    /// The same instance with these facing and opacity overrides.
+    #[must_use]
+    pub fn with_flags(mut self, flags: wgt::TlasInstanceFlags) -> Self {
+        self.flags = flags;
+        self
     }
 
     /// Set the bottom level acceleration structure.
